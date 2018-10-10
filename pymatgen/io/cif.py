@@ -1193,7 +1193,7 @@ class CifParser(object):
 
 
 class CifWriter(object):
-    def __init__(self, struct, symprec=None, write_magmoms=False):
+    def __init__(self, struct, symprec=None, write_magmoms=False, standardize=False):
         """
         A wrapper around CifFile to write CIF files from pymatgen structures.
 
@@ -1204,6 +1204,9 @@ class CifWriter(object):
                 to the SpacegroupAnalyzer
             write_magmoms (bool): If True, will write magCIF file. Incompatible
                 with symprec
+            standardize: if symprec is specified ensure the refined structure is
+                standardized according to standards in
+                doi:10.1016/j.commatsci.2010.05.010
         """
 
         if write_magmoms and symprec:
@@ -1223,7 +1226,10 @@ class CifWriter(object):
                           sf.get_space_group_number())
             # Needs the refined struture when using symprec. This converts
             # primitive to conventional structures, the standard for CIF.
-            struct = sf.get_refined_structure()
+            if standardize:
+                struct = sf.get_conventional_standard_structure()
+            else:
+                struct = sf.get_refined_structure()
 
         latt = struct.lattice
         comp = struct.composition
