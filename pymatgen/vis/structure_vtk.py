@@ -345,6 +345,11 @@ class StructureVis(object):
         self.ren_win.Render()
         self.iren.Start()
 
+    def close(self):
+        self.ren_win.Finalize()
+        self.iren.TerminateApp()
+        del self.ren_win, self.iren
+
     def add_site(self, site):
         """
         Add a site to the render window. The site is displayed as a sphere, the

@@ -411,7 +411,7 @@ class StructureMatcher(MSONable):
         else:
             return int(round(fu)), True
 
-    def _get_lattices(self, target_lattice, s, supercell_size=1):
+    def _get_lattices(self, target_lattice, s, supercell_size=1, rh_only=False):
         """
         Yields lattices for s with lengths and angles close to the
         lattice of target_s. If supercell_size is specified, the
@@ -420,15 +420,18 @@ class StructureMatcher(MSONable):
 
         Args:
             s, target_s: Structure objects
+            rh_only (bool): whether or not to only return lattices with det(basis)>0
         """
         lattices = s.lattice.find_all_mappings(
             target_lattice, ltol=self.ltol, atol=self.angle_tol,
             skip_rotation_matrix=True)
         for l, _, scale_m in lattices:
-            if abs(abs(np.linalg.det(scale_m)) - supercell_size) < 0.5:
+            is_rh = np.linalg.det(scale_m) > 0
+            allowed = is_rh or not rh_only
+            if abs(abs(np.linalg.det(scale_m)) - supercell_size) < 0.5 and allowed:
                 yield l, scale_m
 
-    def _get_supercells(self, struct1, struct2, fu, s1_supercell):
+    def _get_supercells(self, struct1, struct2, fu, s1_supercell, rh_only=False):
         """
         Computes all supercells of one structure close to the lattice of the
         other
@@ -446,13 +449,13 @@ class StructureMatcher(MSONable):
             s2_fc = np.array(s2.frac_coords)
             if fu == 1:
                 cc = np.array(s1.cart_coords)
-                for l, sc_m in self._get_lattices(s2.lattice, s1, fu):
+                for l, sc_m in self._get_lattices(s2.lattice, s1, fu, rh_only=rh_only):
                     fc = l.get_fractional_coords(cc)
                     fc -= np.floor(fc)
                     yield fc, s2_fc, av_lat(l, s2.lattice), sc_m
             else:
                 fc_init = np.array(s1.frac_coords)
-                for l, sc_m in self._get_lattices(s2.lattice, s1, fu):
+                for l, sc_m in self._get_lattices(s2.lattice, s1, fu, rh_only=rh_only):
                     fc = np.dot(fc_init, np.linalg.inv(sc_m))
                     lp = lattice_points_in_supercell(sc_m)
                     fc = (fc[:, None, :] + lp[None, :, :]).reshape((-1, 3))
@@ -664,7 +667,7 @@ class StructureMatcher(MSONable):
                 break_on_match=break_on_match, use_rms=use_rms)
 
     def _strict_match(self, struct1, struct2, fu, s1_supercell=True,
-                      use_rms=False, break_on_match=False):
+                      use_rms=False, break_on_match=False, rh_only=False):
         """
         Matches struct2 onto struct1 (which should contain all sites in
         struct2).
@@ -677,6 +680,7 @@ class StructureMatcher(MSONable):
             use_rms (bool): whether to minimize the rms of the matching
             break_on_match (bool): whether to stop search at first
                 valid match
+            rh_only (bool): whether to only return structures with det(basis)>0
         """
         if fu < 1:
             raise ValueError("fu cannot be less than 1")
@@ -698,7 +702,7 @@ class StructureMatcher(MSONable):
         best_match = None
         # loop over all lattices
         for s1fc, s2fc, avg_l, sc_m in \
-                self._get_supercells(struct1, struct2, fu, s1_supercell):
+                self._get_supercells(struct1, struct2, fu, s1_supercell, rh_only=rh_only):
             # compute fractional tolerance
             normalization = (len(s1fc) / avg_l.volume) ** (1/3)
             inv_abc = np.array(avg_l.reciprocal_lattice.abc)
@@ -980,7 +984,7 @@ class StructureMatcher(MSONable):
 
         return match[2]
 
-    def get_transformation(self, struct1, struct2):
+    def get_transformation(self, struct1, struct2, rh_only=False):
         """
         Returns the supercell transformation, fractional translation vector,
         and a mapping to transform struct2 to be similar to struct1.
@@ -988,6 +992,7 @@ class StructureMatcher(MSONable):
         Args:
             struct1 (Structure): Reference structure
             struct2 (Structure): Structure to transform.
+            rh_only (bool): whether to only return structures with det(basis)>0
 
         Returns:
             supercell (numpy.ndarray(3, 3)): supercell matrix
@@ -1013,7 +1018,7 @@ class StructureMatcher(MSONable):
         if len(s1) * ratio >= len(s2):
             # s1 is superset
             match = self._strict_match(s1, s2, fu=fu, s1_supercell=False,
-                                       use_rms=True, break_on_match=False)
+                                       use_rms=True, break_on_match=False, rh_only=rh_only)
             if match is None:
                 return None
             # invert the mapping, since it needs to be from s1 to s2
@@ -1033,7 +1038,7 @@ class StructureMatcher(MSONable):
             mapping = list(match[4]) + not_included
             return match[2], -match[3], mapping
 
-    def get_s2_like_s1(self, struct1, struct2, include_ignored_species=True):
+    def get_s2_like_s1(self, struct1, struct2, include_ignored_species=True, rh_only=False):
         """
         Performs transformations on struct2 to put it in a basis similar to
         struct1 (without changing any of the inter-site distances)
@@ -1051,7 +1056,7 @@ class StructureMatcher(MSONable):
             supercell, sorting, and translating struct2.
         """
         s1, s2 = self._process_species([struct1, struct2])
-        trans = self.get_transformation(s1, s2)
+        trans = self.get_transformation(s1, s2, rh_only=rh_only)
         if trans is None:
             return None
         sc, t, mapping = trans
@@ -1105,4 +1110,3 @@ class StructureMatcher(MSONable):
             return None
 
         return match[4]
-    
