@@ -228,7 +228,7 @@ class Pseudo(six.with_metaclass(abc.ABCMeta, MSONable, object)):
         return self.compute_md5()
 
     def compute_md5(self):
-        """Compute and erturn MD5 hash value."""
+        """Compute and return MD5 hash value."""
         import hashlib
         with open(self.path, "rt") as fh:
             text = fh.read()
