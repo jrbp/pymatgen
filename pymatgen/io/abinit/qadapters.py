@@ -122,6 +122,8 @@ class MpiRunner(object):
             num_opt = "--ranks-per-node " + str(rpn)
             cmd = " ".join([self.name, self.options, num_opt, "--exp-env OMP_NUM_THREADS",
                            "--exe `which " + executable + "` ", stdin, stdout, stderr])
+        elif basename == "$gbrun": # for rupc
+            cmd = " ".join([self.name, self.options, executable, stdin, stdout, stderr])
         else:
             if qad.mpi_procs != 1:
                 raise ValueError("Cannot use mpi_procs > when mpi_runner basename=%s" % basename)
