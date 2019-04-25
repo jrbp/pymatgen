@@ -720,7 +720,10 @@ class StructureMatcher(MSONable):
                         val = np.linalg.norm(dist) / len(dist) ** 0.5
                     else:
                         val = max(dist)
-                    if best_match is None or val < best_match[0]:
+                    # I find that earlier lattices are often more "standard"
+                    # so here I prefer them if differences are < 1e-12
+                    # if best_match is None or val < best_match[0]:
+                    if best_match is None or best_match[0] - val > 1e-12:
                         total_t = t + t_adj
                         total_t -= np.round(total_t)
                         best_match = val, dist, sc_m, total_t, mapping
